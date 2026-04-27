@@ -1,0 +1,119 @@
+name: Build Unsigned IPA Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag. Leave empty to use unsigned-ipa-<run-number>."
+        required: false
+        type: string
+      release_name:
+        description: "Release title. Leave empty to use the generated tag."
+        required: false
+        type: string
+      prerelease:
+        description: "Mark the GitHub release as a prerelease."
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  SCHEME: LlamaIOS
+  CONFIGURATION: Release
+  DERIVED_DATA_PATH: build/DerivedData
+  IPA_NAME: LlamaIOS-unsigned.ipa
+
+jobs:
+  build-unsigned-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project LlamaIOS.xcodeproj \
+            -scheme "$SCHEME"
+
+      - name: Build app without code signing
+        run: |
+          xcodebuild build \
+            -project LlamaIOS.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+
+          APP_PATH="$DERIVED_DATA_PATH/Build/Products/${CONFIGURATION}-iphoneos/${SCHEME}.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "App bundle not found at $APP_PATH"
+            exit 1
+          fi
+
+          rm -rf build/ipa
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/
+          (cd build/ipa && zip -qry "../$IPA_NAME" Payload)
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa
+          path: build/${{ env.IPA_NAME }}
+          if-no-files-found: error
+
+      - name: Prepare release metadata
+        id: release
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          INPUT_RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          set -euo pipefail
+
+          TAG_NAME="$INPUT_TAG_NAME"
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="unsigned-ipa-${{ github.run_number }}"
+          fi
+
+          RELEASE_NAME="$INPUT_RELEASE_NAME"
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="$TAG_NAME"
+          fi
+
+          {
+            echo "tag_name=$TAG_NAME"
+            echo "release_name=$RELEASE_NAME"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release and upload IPA
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.release.outputs.release_name }}
+          prerelease: ${{ inputs.prerelease }}
+          files: build/${{ env.IPA_NAME }}
+          body: |
+            Unsigned IPA built from `${{ github.sha }}`.
+
+            This IPA is not code signed and is intended for external signing or tooling that accepts unsigned IPA files.
