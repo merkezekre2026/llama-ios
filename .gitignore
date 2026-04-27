@@ -1,0 +1,13 @@
+.DS_Store
+DerivedData/
+.build/
+*.xcodeproj
+*.xcworkspace
+*.xcuserstate
+xcuserdata/
+
+# Local model artifacts can be very large.
+*.gguf
+Models/
+Downloads/
+
