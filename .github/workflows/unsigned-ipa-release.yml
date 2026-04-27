@@ -41,6 +41,16 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Normalize project format for Xcode 15
+        run: |
+          ruby <<'RUBY'
+          project = "LlamaIOS.xcodeproj/project.pbxproj"
+          contents = File.read(project)
+          contents.gsub!(/objectVersion = \d+;/, "objectVersion = 60;")
+          contents.gsub!(/compatibilityVersion = "Xcode [^"]+";/, 'compatibilityVersion = "Xcode 15.0";')
+          File.write(project, contents)
+          RUBY
+
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
