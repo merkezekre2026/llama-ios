@@ -46,7 +46,13 @@ final class ModelStore: ObservableObject {
         }
 
         let data = try Data(contentsOf: metadataURL)
-        let decoded = try JSONDecoder.appDecoder.decode([ModelRecord].self, from: data)
+        let decoded: [ModelRecord]
+        if let store = try? JSONDecoder.appDecoder.decode(VersionedModelStore.self, from: data) {
+            decoded = store.models
+        } else {
+            decoded = try JSONDecoder.appDecoder.decode([ModelRecord].self, from: data)
+        }
+
         models = decoded.filter { fileManager.fileExists(atPath: $0.localPath) }
         try persist()
     }
@@ -70,9 +76,9 @@ final class ModelStore: ObservableObject {
     }
 
     @discardableResult
-    func registerDownloadedModel(at fileURL: URL) throws -> ModelRecord {
+    func registerDownloadedModel(at fileURL: URL, metadata: ModelDownloadMetadata = ModelDownloadMetadata()) throws -> ModelRecord {
         try validateModelFile(fileURL)
-        return try registerModel(at: fileURL, source: .downloaded)
+        return try registerModel(at: fileURL, source: .downloaded, metadata: metadata)
     }
 
     func deleteModel(_ model: ModelRecord) {
@@ -84,6 +90,12 @@ final class ModelStore: ObservableObject {
     func model(withID id: UUID?) -> ModelRecord? {
         guard let id else { return nil }
         return models.first { $0.id == id }
+    }
+
+    func markUsed(modelId: UUID) {
+        guard let index = models.firstIndex(where: { $0.id == modelId }) else { return }
+        models[index].lastUsedAt = Date()
+        try? persist()
     }
 
     func uniqueDestinationURL(for filename: String) -> URL {
@@ -101,14 +113,23 @@ final class ModelStore: ObservableObject {
         return candidate
     }
 
-    private func registerModel(at fileURL: URL, source: ModelSource) throws -> ModelRecord {
+    private func registerModel(
+        at fileURL: URL,
+        source: ModelSource,
+        metadata: ModelDownloadMetadata = ModelDownloadMetadata()
+    ) throws -> ModelRecord {
         let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
         let size = attributes[.size] as? NSNumber
         let record = ModelRecord(
             displayName: fileURL.deletingPathExtension().lastPathComponent,
             source: source,
             localPath: fileURL.path,
-            sizeBytes: size?.int64Value ?? 0
+            sizeBytes: size?.int64Value ?? 0,
+            repoId: metadata.repoId,
+            filename: metadata.filename,
+            parameterSize: metadata.parameterSize,
+            quantization: metadata.quantization,
+            downloadURL: metadata.downloadURL
         )
 
         models.removeAll { $0.localPath == record.localPath }
@@ -130,9 +151,14 @@ final class ModelStore: ObservableObject {
     }
 
     private func persist() throws {
-        let data = try JSONEncoder.appEncoder.encode(models)
+        let store = VersionedModelStore(version: .v2, models: models)
+        let data = try JSONEncoder.appEncoder.encode(store)
         try fileManager.createDirectory(at: metadataURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: metadataURL, options: [.atomic])
     }
 }
 
+private struct VersionedModelStore: Codable {
+    var version: PersistentStoreVersion
+    var models: [ModelRecord]
+}

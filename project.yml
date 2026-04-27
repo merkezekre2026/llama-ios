@@ -27,6 +27,7 @@ targets:
         INFOPLIST_FILE: LlamaIOS/Supporting/Info.plist
         TARGETED_DEVICE_FAMILY: 1,2
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   LlamaIOSTests:
     type: bundle.unit-test
     platform: iOS

@@ -25,5 +25,16 @@ final class HuggingFaceDownloaderTests: XCTestCase {
             XCTAssertEqual(error as? HuggingFaceDownloadError, .invalidFilename)
         }
     }
-}
 
+    func testBuildsCatalogFilePathURL() throws {
+        let url = try HuggingFaceDownloader.downloadURL(
+            repoId: "owner/model",
+            filePath: "quantized/model.Q4_K_M.gguf"
+        )
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://huggingface.co/owner/model/resolve/main/quantized/model.Q4_K_M.gguf"
+        )
+    }
+}

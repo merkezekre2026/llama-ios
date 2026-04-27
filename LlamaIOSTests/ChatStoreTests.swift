@@ -34,6 +34,29 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(store.prompt(for: session), "User: Hello\nAssistant: Hi\nAssistant:")
     }
 
+    func testMigratesV1ChatArrayToVersionedStore() throws {
+        let root = try temporaryDirectory()
+        let modelId = UUID()
+        let session = ChatSession(
+            title: "Legacy",
+            modelId: modelId,
+            messages: [ChatMessage(role: .user, content: "Hello")]
+        )
+        let legacyData = try JSONEncoder.appEncoder.encode([session])
+        try legacyData.write(to: root.appending(path: "chats.json"))
+
+        let store = ChatStore(baseDirectory: root)
+        try store.load()
+
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertEqual(store.sessions[0].title, "Legacy")
+
+        let migratedData = try Data(contentsOf: root.appending(path: "chats.json"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: migratedData) as? [String: Any])
+        XCTAssertEqual(json["version"] as? Int, PersistentStoreVersion.v2.rawValue)
+        XCTAssertNotNil(json["sessions"])
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
@@ -41,4 +64,3 @@ final class ChatStoreTests: XCTestCase {
         return url
     }
 }
-

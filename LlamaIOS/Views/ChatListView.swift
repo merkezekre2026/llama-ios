@@ -6,8 +6,7 @@ struct ChatListView: View {
 
     let engine: LlamaEngine
     @Binding var settings: GenerationSettings
-
-    @State private var selectedSessionID: UUID?
+    @Binding var selectedSessionID: UUID?
 
     var body: some View {
         NavigationSplitView {
@@ -70,4 +69,3 @@ struct ChatListView: View {
         chatStore.sessions.first { $0.id == selectedSessionID }
     }
 }
-

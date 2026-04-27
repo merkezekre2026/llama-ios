@@ -25,7 +25,10 @@ struct ChatDetailView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         if session.messages.isEmpty {
-                            ContentUnavailableView("Start a Message", systemImage: "text.bubble")
+                            ContentUnavailableView(
+                                modelStore.models.isEmpty ? "Install a Model" : "Start a Message",
+                                systemImage: modelStore.models.isEmpty ? "externaldrive.badge.plus" : "text.bubble"
+                            )
                                 .padding(.top, 48)
                         } else {
                             ForEach(session.messages) { message in
@@ -52,6 +55,12 @@ struct ChatDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             selectedModelID = session.modelId ?? modelStore.models.first?.id
+        }
+        .onChange(of: modelStore.models) { _, models in
+            if let selectedModelID, models.contains(where: { $0.id == selectedModelID }) {
+                return
+            }
+            self.selectedModelID = session.modelId ?? models.first?.id
         }
         .onDisappear {
             stopGeneration()
@@ -132,6 +141,7 @@ struct ChatDetailView: View {
         errorMessage = nil
 
         chatStore.updateModel(sessionId: session.id, modelId: selectedModel.id)
+        modelStore.markUsed(modelId: selectedModel.id)
         chatStore.appendMessage(sessionId: session.id, role: .user, content: text)
 
         guard let promptSession = chatStore.sessions.first(where: { $0.id == session.id }),
@@ -192,6 +202,7 @@ private struct MessageBubble: View {
 
             Text(message.content.isEmpty ? " " : message.content)
                 .font(.body)
+                .textSelection(.enabled)
                 .padding(12)
                 .background(background)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -214,4 +225,3 @@ private struct MessageBubble: View {
         }
     }
 }
-

@@ -54,15 +54,53 @@ final class HuggingFaceDownloader: NSObject, ObservableObject {
         return url
     }
 
+    static func downloadURL(repoId: String, filePath: String) throws -> URL {
+        let repo = repoId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let file = filePath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard isValidRepoId(repo) else {
+            throw HuggingFaceDownloadError.invalidRepoId
+        }
+
+        guard isValidGGUFFilePath(file) else {
+            throw HuggingFaceDownloadError.invalidFilename
+        }
+
+        let encodedRepo = repo
+            .split(separator: "/")
+            .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
+            .joined(separator: "/")
+        let encodedFile = file
+            .split(separator: "/")
+            .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
+            .joined(separator: "/")
+
+        guard let url = URL(string: "https://huggingface.co/\(encodedRepo)/resolve/main/\(encodedFile)") else {
+            throw HuggingFaceDownloadError.invalidFilename
+        }
+
+        return url
+    }
+
     func download(repoId: String, filename: String, destinationDirectory: URL) async throws -> URL {
         let url = try Self.downloadURL(repoId: repoId, filename: filename)
-        let targetURL = uniqueDestinationURL(for: filename, in: destinationDirectory)
+        return try await download(from: url, localFilename: filename, destinationDirectory: destinationDirectory)
+    }
+
+    func download(repoId: String, filePath: String, destinationDirectory: URL) async throws -> URL {
+        let url = try Self.downloadURL(repoId: repoId, filePath: filePath)
+        let localFilename = URL(fileURLWithPath: filePath).lastPathComponent
+        return try await download(from: url, localFilename: localFilename, destinationDirectory: destinationDirectory)
+    }
+
+    private func download(from url: URL, localFilename: String, destinationDirectory: URL) async throws -> URL {
+        let targetURL = uniqueDestinationURL(for: localFilename, in: destinationDirectory)
 
         try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
 
         return try await withCheckedThrowingContinuation { continuation in
             self.progress = 0
-            self.activeFilename = filename
+            self.activeFilename = localFilename
             self.continuation = continuation
             self.destinationURL = targetURL
 
@@ -96,6 +134,13 @@ final class HuggingFaceDownloader: NSObject, ObservableObject {
         guard filename.lowercased().hasSuffix(".gguf") else { return false }
         guard !filename.contains(".."), !filename.contains("/"), !filename.contains("\\") else { return false }
         return !filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static func isValidGGUFFilePath(_ filePath: String) -> Bool {
+        guard filePath.lowercased().hasSuffix(".gguf") else { return false }
+        guard !filePath.contains(".."), !filePath.contains("\\") else { return false }
+        return filePath.split(separator: "/", omittingEmptySubsequences: false)
+            .allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private func uniqueDestinationURL(for filename: String, in directory: URL) -> URL {
@@ -184,4 +229,3 @@ extension HuggingFaceDownloader: URLSessionDownloadDelegate {
         }
     }
 }
-

@@ -7,10 +7,15 @@ SwiftUI iOS 17+ app for running local GGUF models with `llama.cpp` through the
 
 - Import `.gguf` models from Files.
 - Download public Hugging Face GGUF files with `owner/model-name` and filename.
+- Discover public Hugging Face GGUF models from an in-app catalog.
+- Pick a GGUF file from a model detail page and download it directly.
 - Store models in the app sandbox under `Application Support/Models`.
+- Persist model metadata such as repo id, filename, quantization, parameter size,
+  download URL, and last-used time.
 - Manage multiple chat sessions with persisted JSON history.
 - Stream local generation token-by-token through llama.cpp.
 - Tune temperature, context length, max tokens, thread count, seed, and GPU layers.
+- Persist generation settings across app launches.
 
 ## Requirements
 
@@ -43,8 +48,14 @@ The app downloads from:
 https://huggingface.co/{repoId}/resolve/main/{filename}
 ```
 
-Private and gated models are intentionally out of scope for v1 because they need
-token storage and authenticated requests.
+Private and gated models remain out of scope for v2. The catalog and download
+flows only use public Hugging Face Hub APIs.
+
+## Persistence
+
+v2 stores chats, models, and generation settings in versioned JSON files. Existing
+v1 `chats.json` and `models.json` array files are migrated in place the first time
+the app loads them.
 
 ## Tests
 

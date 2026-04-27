@@ -20,8 +20,13 @@ final class ChatStore: ObservableObject {
         }
 
         let data = try Data(contentsOf: storageURL)
-        sessions = try JSONDecoder.appDecoder.decode([ChatSession].self, from: data)
-            .sorted { $0.updatedAt > $1.updatedAt }
+        if let store = try? JSONDecoder.appDecoder.decode(VersionedChatStore.self, from: data) {
+            sessions = store.sessions.sorted { $0.updatedAt > $1.updatedAt }
+        } else {
+            sessions = try JSONDecoder.appDecoder.decode([ChatSession].self, from: data)
+                .sorted { $0.updatedAt > $1.updatedAt }
+            try persist()
+        }
     }
 
     @discardableResult
@@ -89,9 +94,14 @@ final class ChatStore: ObservableObject {
     }
 
     private func persist() throws {
-        let data = try JSONEncoder.appEncoder.encode(sessions)
+        let store = VersionedChatStore(version: .v2, sessions: sessions)
+        let data = try JSONEncoder.appEncoder.encode(store)
         try fileManager.createDirectory(at: storageURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: storageURL, options: [.atomic])
     }
 }
 
+private struct VersionedChatStore: Codable {
+    var version: PersistentStoreVersion
+    var sessions: [ChatSession]
+}

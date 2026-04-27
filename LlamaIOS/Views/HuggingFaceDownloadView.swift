@@ -5,7 +5,7 @@ struct HuggingFaceDownloadView: View {
     @ObservedObject var downloader: HuggingFaceDownloader
 
     let destinationDirectory: URL
-    let onDownloaded: (URL) -> Void
+    let onDownloaded: (URL, ModelDownloadMetadata) -> Void
 
     @State private var repoId = ""
     @State private var filename = ""
@@ -74,7 +74,15 @@ struct HuggingFaceDownloadView: View {
                     filename: filename,
                     destinationDirectory: destinationDirectory
                 )
-                onDownloaded(fileURL)
+                let resolvedURL = try? HuggingFaceDownloader.downloadURL(repoId: repoId, filename: filename)
+                let metadata = ModelDownloadMetadata(
+                    repoId: repoId.trimmingCharacters(in: .whitespacesAndNewlines),
+                    filename: filename.trimmingCharacters(in: .whitespacesAndNewlines),
+                    parameterSize: CatalogModel.inferParameterSize(from: repoId + "/" + filename),
+                    quantization: CatalogModelFile.inferQuantization(from: filename),
+                    downloadURL: resolvedURL?.absoluteString
+                )
+                onDownloaded(fileURL, metadata)
                 dismiss()
             } catch is CancellationError {
                 errorMessage = nil
@@ -84,4 +92,3 @@ struct HuggingFaceDownloadView: View {
         }
     }
 }
-
